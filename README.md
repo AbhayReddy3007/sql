@@ -1,40 +1,3 @@
-(venv) C:\Users\p90022569\Downloads\d2p>pip install --upgrade google-genai
-Requirement already satisfied: google-genai in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (1.35.0)
-Collecting google-genai
-  Downloading google_genai-1.36.0-py3-none-any.whl (244 kB)
-     |████████████████████████████████| 244 kB 3.3 MB/s
-Requirement already satisfied: websockets<15.1.0,>=13.0.0 in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from google-genai) (15.0.1)
-Requirement already satisfied: pydantic<3.0.0,>=2.0.0 in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from google-genai) (2.11.7)
-Requirement already satisfied: tenacity<9.2.0,>=8.2.3 in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from google-genai) (9.1.2)
-Requirement already satisfied: typing-extensions<5.0.0,>=4.11.0 in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from google-genai) (4.15.0)
-Requirement already satisfied: requests<3.0.0,>=2.28.1 in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from google-genai) (2.32.5)
-Requirement already satisfied: google-auth<3.0.0,>=2.14.1 in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from google-genai) (2.40.3)
-Requirement already satisfied: httpx<1.0.0,>=0.28.1 in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from google-genai) (0.28.1)
-Requirement already satisfied: anyio<5.0.0,>=4.8.0 in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from google-genai) (4.10.0)
-Requirement already satisfied: idna>=2.8 in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from anyio<5.0.0,>=4.8.0->google-genai) (3.10)
-Requirement already satisfied: exceptiongroup>=1.0.2 in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from anyio<5.0.0,>=4.8.0->google-genai) (1.3.0)
-Requirement already satisfied: sniffio>=1.1 in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from anyio<5.0.0,>=4.8.0->google-genai) (1.3.1)
-Requirement already satisfied: rsa<5,>=3.1.4 in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from google-auth<3.0.0,>=2.14.1->google-genai) (4.9.1)
-Requirement already satisfied: cachetools<6.0,>=2.0.0 in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from google-auth<3.0.0,>=2.14.1->google-genai) (5.5.2)
-Requirement already satisfied: pyasn1-modules>=0.2.1 in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from google-auth<3.0.0,>=2.14.1->google-genai) (0.4.2)
-Requirement already satisfied: certifi in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from httpx<1.0.0,>=0.28.1->google-genai) (2025.8.3)
-Requirement already satisfied: httpcore==1.* in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from httpx<1.0.0,>=0.28.1->google-genai) (1.0.9)
-Requirement already satisfied: h11>=0.16 in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from httpcore==1.*->httpx<1.0.0,>=0.28.1->google-genai) (0.16.0)
-Requirement already satisfied: pyasn1<0.7.0,>=0.6.1 in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from pyasn1-modules>=0.2.1->google-auth<3.0.0,>=2.14.1->google-genai) (0.6.1)
-Requirement already satisfied: annotated-types>=0.6.0 in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from pydantic<3.0.0,>=2.0.0->google-genai) (0.7.0)
-Requirement already satisfied: pydantic-core==2.33.2 in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from pydantic<3.0.0,>=2.0.0->google-genai) (2.33.2)
-Requirement already satisfied: typing-inspection>=0.4.0 in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from pydantic<3.0.0,>=2.0.0->google-genai) (0.4.1)
-Requirement already satisfied: charset_normalizer<4,>=2 in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from requests<3.0.0,>=2.28.1->google-genai) (3.4.3)
-Requirement already satisfied: urllib3<3,>=1.21.1 in c:\users\p90022569\downloads\d2p\venv\lib\site-packages (from requests<3.0.0,>=2.28.1->google-genai) (2.5.0)
-Installing collected packages: google-genai
-  Attempting uninstall: google-genai
-    Found existing installation: google-genai 1.35.0
-    Uninstalling google-genai-1.35.0:
-      Successfully uninstalled google-genai-1.35.0
-Successfully installed google-genai-1.36.0
-WARNING: You are using pip version 21.2.3; however, version 25.2 is available.
-You should consider upgrading via the 'C:\Users\p90022569\Downloads\d2p\venv\Scripts\python.exe -m pip install --upgrade pip' command.
-
 (venv) C:\Users\p90022569\Downloads\d2p>uvicorn main:app --reload
 ←[32mINFO←[0m:     Will watch for changes in these directories: ['C:\\Users\\p90022569\\Downloads\\d2p']
 ←[32mINFO←[0m:     Uvicorn running on ←[1mhttp://127.0.0.1:8000←[0m (Press CTRL+C to quit)
@@ -72,3 +35,87 @@ Traceback (most recent call last):
   File "C:\Users\p90022569\Downloads\d2p\main.py", line 17, in <module>
     from google.genai.types import Text, CompletionParams
 ImportError: cannot import name 'Text' from 'google.genai.types' (C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\google\genai\types.py)
+←[33mWARNING←[0m:  StatReload detected changes in 'main.py'. Reloading...
+ ←[32mINFO←[0m:     Started server process [←[36m14832←[0m]
+←[32mINFO←[0m:     Waiting for application startup.
+←[32mINFO←[0m:     Application startup complete.
+←[32mINFO←[0m:     127.0.0.1:64164 - "←[1mPOST /chat HTTP/1.1←[0m" ←[91m500 Internal Server Error←[0m
+←[31mERROR←[0m:    Exception in ASGI application
+Traceback (most recent call last):
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\uvicorn\protocols\http\h11_impl.py", line 403, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\fastapi\applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\applications.py", line 113, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\middleware\cors.py", line 85, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\routing.py", line 78, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\routing.py", line 75, in app
+    response = await f(request)
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\fastapi\routing.py", line 302, in app
+    raw_response = await run_endpoint_function(
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\fastapi\routing.py", line 215, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\concurrency.py", line 38, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\anyio\to_thread.py", line 56, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\anyio\_backends\_asyncio.py", line 2476, in run_sync_in_worker_thread
+    return await future
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\anyio\_backends\_asyncio.py", line 967, in run
+    result = context.run(func, *args)
+  File "C:\Users\p90022569\Downloads\d2p\main.py", line 187, in chat
+    reply = call_gemini(req.message)
+  File "C:\Users\p90022569\Downloads\d2p\main.py", line 145, in call_gemini
+    resp = genai_client.models.generate_content(
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\google\genai\models.py", line 6565, in generate_content
+    response = self._generate_content(
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\google\genai\models.py", line 5377, in _generate_content
+    response = self._api_client.request(
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\google\genai\_api_client.py", line 1289, in request
+    response = self._request(http_request, http_options, stream=False)
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\google\genai\_api_client.py", line 1109, in _request
+    return self._retry(self._request_once, http_request, stream)  # type: ignore[no-any-return]
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\tenacity\__init__.py", line 477, in __call__
+    do = self.iter(retry_state=retry_state)
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\tenacity\__init__.py", line 378, in iter
+    result = action(retry_state)
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\tenacity\__init__.py", line 420, in exc_check
+    raise retry_exc.reraise()
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\tenacity\__init__.py", line 187, in reraise
+    raise self.last_attempt.result()
+  File "C:\Program Files\Python310\lib\concurrent\futures\_base.py", line 438, in result
+    return self.__get_result()
+  File "C:\Program Files\Python310\lib\concurrent\futures\_base.py", line 390, in __get_result
+    raise self._exception
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\tenacity\__init__.py", line 480, in __call__
+    result = fn(*args, **kwargs)
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\google\genai\_api_client.py", line 1086, in _request_once
+    errors.APIError.raise_for_response(response)
+  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\google\genai\errors.py", line 105, in raise_for_response
+    raise ClientError(status_code, response_json, response)
+google.genai.errors.ClientError: 403 PERMISSION_DENIED. {'error': {'code': 403, 'message': 'Generative Language API has not been used in project 305423101018 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=305423101018 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.', 'status': 'PERMISSION_DENIED', 'details': [{'@type': 'type.googleapis.com/google.rpc.ErrorInfo', 'reason': 'SERVICE_DISABLED', 'domain': 'googleapis.com', 'metadata': {'containerInfo': '305423101018', 'consumer': 'projects/305423101018', 'activationUrl': 'https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=305423101018', 'service': 'generativelanguage.googleapis.com', 'serviceTitle': 'Generative Language API'}}, {'@type': 'type.googleapis.com/google.rpc.LocalizedMessage', 'locale': 'en-US', 'message': 'Generative Language API has not been used in project 305423101018 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=305423101018 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.'}, {'@type': 'type.googleapis.com/google.rpc.Help', 'links': [{'description': 'Google developers console API activation', 'url': 'https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=305423101018'}]}]}}
