@@ -1,121 +1,303 @@
-(venv) C:\Users\p90022569\Downloads\d2p>uvicorn main:app --reload
-←[32mINFO←[0m:     Will watch for changes in these directories: ['C:\\Users\\p90022569\\Downloads\\d2p']
-←[32mINFO←[0m:     Uvicorn running on ←[1mhttp://127.0.0.1:8000←[0m (Press CTRL+C to quit)
-←[32mINFO←[0m:     Started reloader process [←[36m←[1m9688←[0m] using ←[36m←[1mStatReload←[0m
-Process SpawnProcess-1:
-Traceback (most recent call last):
-  File "C:\Program Files\Python310\lib\multiprocessing\process.py", line 315, in _bootstrap
-    self.run()
-  File "C:\Program Files\Python310\lib\multiprocessing\process.py", line 108, in run
-    self._target(*self._args, **self._kwargs)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\uvicorn\_subprocess.py", line 80, in subprocess_started
-    target(sockets=sockets)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\uvicorn\server.py", line 67, in run
-    return asyncio.run(self.serve(sockets=sockets))
-  File "C:\Program Files\Python310\lib\asyncio\runners.py", line 44, in run
-    return loop.run_until_complete(main)
-  File "C:\Program Files\Python310\lib\asyncio\base_events.py", line 641, in run_until_complete
-    return future.result()
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\uvicorn\server.py", line 71, in serve
-    await self._serve(sockets)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\uvicorn\server.py", line 78, in _serve
-    config.load()
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\uvicorn\config.py", line 436, in load
-    self.loaded_app = import_from_string(self.app)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\uvicorn\importer.py", line 19, in import_from_string
-    module = importlib.import_module(module_str)
-  File "C:\Program Files\Python310\lib\importlib\__init__.py", line 126, in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-  File "<frozen importlib._bootstrap>", line 1050, in _gcd_import
-  File "<frozen importlib._bootstrap>", line 1027, in _find_and_load
-  File "<frozen importlib._bootstrap>", line 1006, in _find_and_load_unlocked
-  File "<frozen importlib._bootstrap>", line 688, in _load_unlocked
-  File "<frozen importlib._bootstrap_external>", line 883, in exec_module
-  File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
-  File "C:\Users\p90022569\Downloads\d2p\main.py", line 17, in <module>
-    from google.genai.types import Text, CompletionParams
-ImportError: cannot import name 'Text' from 'google.genai.types' (C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\google\genai\types.py)
-←[33mWARNING←[0m:  StatReload detected changes in 'main.py'. Reloading...
- ←[32mINFO←[0m:     Started server process [←[36m14832←[0m]
-←[32mINFO←[0m:     Waiting for application startup.
-←[32mINFO←[0m:     Application startup complete.
-←[32mINFO←[0m:     127.0.0.1:64164 - "←[1mPOST /chat HTTP/1.1←[0m" ←[91m500 Internal Server Error←[0m
-←[31mERROR←[0m:    Exception in ASGI application
-Traceback (most recent call last):
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\uvicorn\protocols\http\h11_impl.py", line 403, in run_asgi
-    result = await app(  # type: ignore[func-returns-value]
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
-    return await self.app(scope, receive, send)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\fastapi\applications.py", line 1054, in __call__
-    await super().__call__(scope, receive, send)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\applications.py", line 113, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
-    raise exc
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
-    await self.app(scope, receive, _send)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\middleware\cors.py", line 85, in __call__
-    await self.app(scope, receive, send)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
-    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\routing.py", line 716, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\routing.py", line 736, in app
-    await route.handle(scope, receive, send)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\routing.py", line 290, in handle
-    await self.app(scope, receive, send)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\routing.py", line 78, in app
-    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\routing.py", line 75, in app
-    response = await f(request)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\fastapi\routing.py", line 302, in app
-    raw_response = await run_endpoint_function(
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\fastapi\routing.py", line 215, in run_endpoint_function
-    return await run_in_threadpool(dependant.call, **values)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\starlette\concurrency.py", line 38, in run_in_threadpool
-    return await anyio.to_thread.run_sync(func)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\anyio\to_thread.py", line 56, in run_sync
-    return await get_async_backend().run_sync_in_worker_thread(
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\anyio\_backends\_asyncio.py", line 2476, in run_sync_in_worker_thread
-    return await future
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\anyio\_backends\_asyncio.py", line 967, in run
-    result = context.run(func, *args)
-  File "C:\Users\p90022569\Downloads\d2p\main.py", line 187, in chat
+from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List, Optional
+import os, re, datetime, tempfile, fitz, docx
+from ppt_generator import create_ppt
+from google import genai
+
+# ---------------- CONFIG ----------------
+API_KEY = os.getenv("GEMINI_API_KEY", "your-api-key-here")  # set in env or replace here
+MODEL_NAME = "gemini-2.0-flash"  # or gemini-1.5-pro, etc.
+
+client = genai.Client(api_key=API_KEY)
+
+# ---------------- FASTAPI ----------------
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ---------------- MODELS ----------------
+class ChatRequest(BaseModel):
+    message: str
+
+class Slide(BaseModel):
+    title: str
+    description: str
+
+class Outline(BaseModel):
+    title: str
+    slides: List[Slide]
+
+class EditRequest(BaseModel):
+    outline: Outline
+    feedback: str
+
+class GeneratePPTRequest(BaseModel):
+    description: str = ""
+    outline: Optional[Outline] = None
+
+# ---------------- HELPERS ----------------
+def extract_slide_count(description: str, default: int = 5) -> int:
+    m = re.search(r"(\d+)\s*slides?", description, re.IGNORECASE)
+    if m:
+        total = int(m.group(1))
+        return max(1, total - 1)
+    return default - 1
+
+def generate_title(summary: str) -> str:
+    prompt = f"""Read the following summary and create a short, clear, presentation-style title.
+- Keep it under 12 words
+- Do not include birth dates, long sentences, or excessive details
+- Just give a clean title, like a presentation heading
+
+Summary:
+{summary}
+"""
+    return call_gemini(prompt).strip()
+
+
+@app.post("/upload/")
+async def upload(file: UploadFile = File(...)):
+    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        tmp.write(await file.read())
+        tmp_path = tmp.name
+
+    try:
+        text = extract_text(tmp_path, file.filename)
+    finally:
+        try:
+            os.remove(tmp_path)
+        except Exception:
+            pass
+
+    if not text or not text.strip():
+        raise HTTPException(status_code=400, detail="Unsupported, empty, or unreadable file content.")
+
+    try:
+        summary = summarize_long_text(text)
+
+        # 🔥 Instead of infer_title → use Gemini to generate a nice title
+        title = generate_title(summary) or os.path.splitext(file.filename)[0]
+
+        return {
+            "filename": file.filename,
+            "chars": len(text),
+            "chunks": len(split_text(text)),
+            "title": title,
+            "summary": summary,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Summarization failed: {e}")
+
+
+def infer_title(description: str) -> str:
+    description = description.strip()
+    m = re.search(
+        r"(?:ppt|presentation)\s+on\s+([A-Za-z0-9\s.&'\-]{2,80})",
+        description,
+        re.IGNORECASE,
+    )
+    if m:
+        return re.sub(r"\s+in\s+\d+\s+slides?$", "", m.group(1).strip(), flags=re.IGNORECASE)
+    return description.title() or "Presentation"
+
+def parse_points(points_text: str):
+    points = []
+    current_title, current_bullets = None, []
+    text = points_text.replace("•", "- ").replace("–", "- ")
+    lines = [re.sub(r"[#*>`]", "", ln).strip() for ln in text.splitlines()]
+
+    for line in lines:
+        if not line or "Would you like" in line:
+            continue
+        m = re.match(r"^\s*Slide\s*(\d+)\s*:\s*(.+)$", line, re.IGNORECASE)
+        if m:
+            if current_title:
+                points.append({"title": current_title, "description": "\n".join(current_bullets)})
+            current_title, current_bullets = m.group(2).strip(), []
+            continue
+        if line.startswith("-"):
+            bullet_text = line.lstrip("-").strip()
+            if bullet_text:
+                current_bullets.append(bullet_text)
+        else:
+            if line.strip():
+                current_bullets.append(line.strip())
+    if current_title:
+        points.append({"title": current_title, "description": "\n".join(current_bullets)})
+    return points
+
+def extract_text(path: str, filename: str) -> str:
+    name = filename.lower()
+    if name.endswith(".pdf"):
+        text_parts: List[str] = []
+        doc = fitz.open(path)
+        try:
+            for page in doc:
+                text_parts.append(page.get_text("text"))
+        finally:
+            doc.close()
+        return "\n".join(text_parts)
+
+    if name.endswith(".docx"):
+        d = docx.Document(path)
+        return "\n".join(p.text for p in d.paragraphs)
+
+    if name.endswith(".txt"):
+        for enc in ("utf-8", "utf-16", "utf-16-le", "utf-16-be", "latin-1"):
+            try:
+                with open(path, "r", encoding=enc) as f:
+                    return f.read()
+            except UnicodeDecodeError:
+                continue
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            return f.read()
+    return ""
+
+def split_text(text: str, chunk_size: int = 8000, overlap: int = 300) -> List[str]:
+    if not text:
+        return []
+    chunks: List[str] = []
+    start = 0
+    n = len(text)
+    while start < n:
+        end = min(start + chunk_size, n)
+        chunks.append(text[start:end])
+        if end == n:
+            break
+        start = max(0, end - overlap)
+    return chunks
+
+# ---------------- Gemini Calls ----------------
+def call_gemini(prompt: str) -> str:
+    resp = client.models.generate_content(
+        model=MODEL_NAME,
+        contents=prompt
+    )
+    return resp.text.strip()
+
+def generate_outline_from_desc(description: str, num_slides: int):
+    prompt = f"""Create a PowerPoint outline on: {description}.
+    Generate exactly {num_slides} content slides (excluding title slide).
+    Format strictly like this:
+    Slide 1: <Title>
+    - Bullet
+    - Bullet
+    - Bullet
+    """
+    points_text = call_gemini(prompt)
+    return parse_points(points_text)
+
+def summarize_long_text(full_text: str) -> str:
+    chunks = split_text(full_text)
+    if len(chunks) <= 1:
+        return call_gemini(f"Summarize the following text in detail:\n\n{full_text}")
+    partial_summaries = []
+    for idx, ch in enumerate(chunks, start=1):
+        mapped = call_gemini(f"Summarize this part of a longer document:\n\n{ch}")
+        partial_summaries.append(f"Chunk {idx}:\n{mapped.strip()}")
+    combined = "\n\n".join(partial_summaries)
+    return call_gemini(f"Combine these summaries into one clean, well-structured summary:\n\n{combined}")
+
+def sanitize_filename(name: str) -> str:
+    return re.sub(r'[^A-Za-z0-9_.-]', '_', name)
+
+def clean_title(title: str) -> str:
+    return re.sub(r"\s*\(.*?\)", "", title).strip()
+
+# ---------------- ROUTES ----------------
+@app.post("/chat")
+def chat(req: ChatRequest):
+    if "ppt" in req.message.lower() or "presentation" in req.message.lower():
+        return {"response": "📑 I can help you create a PPT! Tell me more details (topic, slides, etc.)."}
     reply = call_gemini(req.message)
-  File "C:\Users\p90022569\Downloads\d2p\main.py", line 145, in call_gemini
-    resp = genai_client.models.generate_content(
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\google\genai\models.py", line 6565, in generate_content
-    response = self._generate_content(
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\google\genai\models.py", line 5377, in _generate_content
-    response = self._api_client.request(
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\google\genai\_api_client.py", line 1289, in request
-    response = self._request(http_request, http_options, stream=False)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\google\genai\_api_client.py", line 1109, in _request
-    return self._retry(self._request_once, http_request, stream)  # type: ignore[no-any-return]
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\tenacity\__init__.py", line 477, in __call__
-    do = self.iter(retry_state=retry_state)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\tenacity\__init__.py", line 378, in iter
-    result = action(retry_state)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\tenacity\__init__.py", line 420, in exc_check
-    raise retry_exc.reraise()
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\tenacity\__init__.py", line 187, in reraise
-    raise self.last_attempt.result()
-  File "C:\Program Files\Python310\lib\concurrent\futures\_base.py", line 438, in result
-    return self.__get_result()
-  File "C:\Program Files\Python310\lib\concurrent\futures\_base.py", line 390, in __get_result
-    raise self._exception
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\tenacity\__init__.py", line 480, in __call__
-    result = fn(*args, **kwargs)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\google\genai\_api_client.py", line 1086, in _request_once
-    errors.APIError.raise_for_response(response)
-  File "C:\Users\p90022569\Downloads\d2p\venv\lib\site-packages\google\genai\errors.py", line 105, in raise_for_response
-    raise ClientError(status_code, response_json, response)
-google.genai.errors.ClientError: 403 PERMISSION_DENIED. {'error': {'code': 403, 'message': 'Generative Language API has not been used in project 305423101018 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=305423101018 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.', 'status': 'PERMISSION_DENIED', 'details': [{'@type': 'type.googleapis.com/google.rpc.ErrorInfo', 'reason': 'SERVICE_DISABLED', 'domain': 'googleapis.com', 'metadata': {'containerInfo': '305423101018', 'consumer': 'projects/305423101018', 'activationUrl': 'https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=305423101018', 'service': 'generativelanguage.googleapis.com', 'serviceTitle': 'Generative Language API'}}, {'@type': 'type.googleapis.com/google.rpc.LocalizedMessage', 'locale': 'en-US', 'message': 'Generative Language API has not been used in project 305423101018 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=305423101018 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.'}, {'@type': 'type.googleapis.com/google.rpc.Help', 'links': [{'description': 'Google developers console API activation', 'url': 'https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=305423101018'}]}]}}
+    return {"response": reply}
+
+@app.post("/generate-outline")
+def generate_outline(request: GeneratePPTRequest):
+    title = infer_title(request.description)
+    num_content_slides = extract_slide_count(request.description, default=5)
+    points = generate_outline_from_desc(request.description, num_content_slides)
+    return {"title": title, "slides": points}
+
+@app.post("/edit-outline")
+def edit_outline(request: EditRequest):
+    outline_text = ""
+    for idx, slide in enumerate(request.outline.slides, start=1):
+        outline_text += f"Slide {idx}: {slide.title}\n"
+        for bullet in slide.description.split("\n"):
+            outline_text += f"- {bullet}\n"
+    prompt = f"""You are editing a PowerPoint outline.
+    Here is the outline:
+    {outline_text}
+    Feedback: "{request.feedback}"
+    Update the outline according to the feedback and return in the same format.
+    """
+    points_text = call_gemini(prompt)
+    points = parse_points(points_text)
+    return {"title": request.outline.title, "slides": points}
+
+@app.post("/generate-ppt")
+def generate_ppt(req: GeneratePPTRequest):
+    if req.outline:
+        title = clean_title(req.outline.title)
+        if len(title) > 80:
+            title = "Presentation"
+        points = [{"title": clean_title(s.title), "description": s.description} for s in req.outline.slides]
+    else:
+        title = clean_title(infer_title(req.description))
+        if len(title) > 80:
+            title = "Presentation"
+        num_content_slides = extract_slide_count(req.description, default=5)
+        points = generate_outline_from_desc(req.description, num_content_slides)
+
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_title = sanitize_filename(title.replace(" ", "_"))
+    if len(safe_title) > 40:
+        safe_title = "presentation"
+    filename = f"{safe_title}_{timestamp}.pptx"
+    create_ppt(title, points, filename=filename)
+
+    return FileResponse(filename, media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation", filename=filename)
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "model": MODEL_NAME}
+
+@app.post("/upload/")
+async def upload(file: UploadFile = File(...)):
+    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        tmp.write(await file.read())
+        tmp_path = tmp.name
+
+    try:
+        text = extract_text(tmp_path, file.filename)
+    finally:
+        try:
+            os.remove(tmp_path)
+        except Exception:
+            pass
+
+    if not text or not text.strip():
+        raise HTTPException(status_code=400, detail="Unsupported, empty, or unreadable file content.")
+
+    try:
+        summary = summarize_long_text(text)
+        title = infer_title(summary) or os.path.splitext(file.filename)[0]
+        return {
+            "filename": file.filename,
+            "chars": len(text),
+            "chunks": len(split_text(text)),
+            "title": title,
+            "summary": summary,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Summarization failed: {e}")
