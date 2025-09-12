@@ -1,303 +1,103 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
-from fastapi.responses import FileResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List, Optional
-import os, re, datetime, tempfile, fitz, docx
-from ppt_generator import create_ppt
-from google import genai
-
-# ---------------- CONFIG ----------------
-API_KEY = os.getenv("GEMINI_API_KEY", "your-api-key-here")  # set in env or replace here
-MODEL_NAME = "gemini-2.0-flash"  # or gemini-1.5-pro, etc.
-
-client = genai.Client(api_key=API_KEY)
-
-# ---------------- FASTAPI ----------------
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# ---------------- MODELS ----------------
-class ChatRequest(BaseModel):
-    message: str
-
-class Slide(BaseModel):
-    title: str
-    description: str
-
-class Outline(BaseModel):
-    title: str
-    slides: List[Slide]
-
-class EditRequest(BaseModel):
-    outline: Outline
-    feedback: str
-
-class GeneratePPTRequest(BaseModel):
-    description: str = ""
-    outline: Optional[Outline] = None
-
-# ---------------- HELPERS ----------------
-def extract_slide_count(description: str, default: int = 5) -> int:
-    m = re.search(r"(\d+)\s*slides?", description, re.IGNORECASE)
-    if m:
-        total = int(m.group(1))
-        return max(1, total - 1)
-    return default - 1
-
-def generate_title(summary: str) -> str:
-    prompt = f"""Read the following summary and create a short, clear, presentation-style title.
-- Keep it under 12 words
-- Do not include birth dates, long sentences, or excessive details
-- Just give a clean title, like a presentation heading
-
-Summary:
-{summary}
-"""
-    return call_gemini(prompt).strip()
+from pptx import Presentation
+from pptx.util import Pt, Inches
+from pptx.dml.color import RGBColor
+from pptx.enum.text import PP_ALIGN, MSO_AUTO_SIZE, MSO_VERTICAL_ANCHOR
+import re
 
 
-@app.post("/upload/")
-async def upload(file: UploadFile = File(...)):
-    with tempfile.NamedTemporaryFile(delete=False) as tmp:
-        tmp.write(await file.read())
-        tmp_path = tmp.name
-
-    try:
-        text = extract_text(tmp_path, file.filename)
-    finally:
-        try:
-            os.remove(tmp_path)
-        except Exception:
-            pass
-
-    if not text or not text.strip():
-        raise HTTPException(status_code=400, detail="Unsupported, empty, or unreadable file content.")
-
-    try:
-        summary = summarize_long_text(text)
-
-        # 🔥 Instead of infer_title → use Gemini to generate a nice title
-        title = generate_title(summary) or os.path.splitext(file.filename)[0]
-
-        return {
-            "filename": file.filename,
-            "chars": len(text),
-            "chunks": len(split_text(text)),
-            "title": title,
-            "summary": summary,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Summarization failed: {e}")
+def clean_title_text(title: str) -> str:
+    """Clean up titles for slides."""
+    if not title:
+        return "Presentation"
+    title = re.sub(r"\s+", " ", title.strip())  # collapse multiple spaces/newlines
+    return title
 
 
-def infer_title(description: str) -> str:
-    description = description.strip()
-    m = re.search(
-        r"(?:ppt|presentation)\s+on\s+([A-Za-z0-9\s.&'\-]{2,80})",
-        description,
-        re.IGNORECASE,
-    )
-    if m:
-        return re.sub(r"\s+in\s+\d+\s+slides?$", "", m.group(1).strip(), flags=re.IGNORECASE)
-    return description.title() or "Presentation"
+def create_ppt(title, points, filename="output.pptx"):
+    prs = Presentation()
 
-def parse_points(points_text: str):
-    points = []
-    current_title, current_bullets = None, []
-    text = points_text.replace("•", "- ").replace("–", "- ")
-    lines = [re.sub(r"[#*>`]", "", ln).strip() for ln in text.splitlines()]
+    # --- Brand Colors ---
+    PRIMARY_PURPLE = RGBColor(94, 42, 132)   # #5E2A84
+    SECONDARY_TEAL = RGBColor(0, 185, 163)   # #00B9A3
+    TEXT_DARK = RGBColor(40, 40, 40)         # dark gray
+    BG_LIGHT = RGBColor(244, 244, 244)       # light gray
 
-    for line in lines:
-        if not line or "Would you like" in line:
-            continue
-        m = re.match(r"^\s*Slide\s*(\d+)\s*:\s*(.+)$", line, re.IGNORECASE)
-        if m:
-            if current_title:
-                points.append({"title": current_title, "description": "\n".join(current_bullets)})
-            current_title, current_bullets = m.group(2).strip(), []
-            continue
-        if line.startswith("-"):
-            bullet_text = line.lstrip("-").strip()
-            if bullet_text:
-                current_bullets.append(bullet_text)
-        else:
-            if line.strip():
-                current_bullets.append(line.strip())
-    if current_title:
-        points.append({"title": current_title, "description": "\n".join(current_bullets)})
-    return points
+    # Clean the title
+    title = clean_title_text(title)
 
-def extract_text(path: str, filename: str) -> str:
-    name = filename.lower()
-    if name.endswith(".pdf"):
-        text_parts: List[str] = []
-        doc = fitz.open(path)
-        try:
-            for page in doc:
-                text_parts.append(page.get_text("text"))
-        finally:
-            doc.close()
-        return "\n".join(text_parts)
+    # --- Title Slide ---
+    slide_layout = prs.slide_layouts[5]  # blank layout
+    slide = prs.slides.add_slide(slide_layout)
 
-    if name.endswith(".docx"):
-        d = docx.Document(path)
-        return "\n".join(p.text for p in d.paragraphs)
+    # Background
+    fill = slide.background.fill
+    fill.solid()
+    fill.fore_color.rgb = PRIMARY_PURPLE
 
-    if name.endswith(".txt"):
-        for enc in ("utf-8", "utf-16", "utf-16-le", "utf-16-be", "latin-1"):
-            try:
-                with open(path, "r", encoding=enc) as f:
-                    return f.read()
-            except UnicodeDecodeError:
-                continue
-        with open(path, "r", encoding="utf-8", errors="ignore") as f:
-            return f.read()
-    return ""
+    # Title TextBox
+    left, top, width, height = Inches(1), Inches(2), Inches(8), Inches(3)
+    textbox = slide.shapes.add_textbox(left, top, width, height)
+    tf = textbox.text_frame
+    tf.word_wrap = True
+    tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+    tf.vertical_anchor = MSO_VERTICAL_ANCHOR.MIDDLE  # vertically center
 
-def split_text(text: str, chunk_size: int = 8000, overlap: int = 300) -> List[str]:
-    if not text:
-        return []
-    chunks: List[str] = []
-    start = 0
-    n = len(text)
-    while start < n:
-        end = min(start + chunk_size, n)
-        chunks.append(text[start:end])
-        if end == n:
-            break
-        start = max(0, end - overlap)
-    return chunks
+    p = tf.add_paragraph()
+    p.text = title
+    p.font.size = Pt(40)
+    p.font.bold = True
+    p.font.color.rgb = RGBColor(255, 255, 255)
+    p.alignment = PP_ALIGN.CENTER  # horizontal center
 
-# ---------------- Gemini Calls ----------------
-def call_gemini(prompt: str) -> str:
-    resp = client.models.generate_content(
-        model=MODEL_NAME,
-        contents=prompt
-    )
-    return resp.text.strip()
+    # --- Content Slides ---
+    for idx, item in enumerate(points, start=1):
+        key_point = clean_title_text(item.get("title", ""))
+        description = item.get("description", "")
 
-def generate_outline_from_desc(description: str, num_slides: int):
-    prompt = f"""Create a PowerPoint outline on: {description}.
-    Generate exactly {num_slides} content slides (excluding title slide).
-    Format strictly like this:
-    Slide 1: <Title>
-    - Bullet
-    - Bullet
-    - Bullet
-    """
-    points_text = call_gemini(prompt)
-    return parse_points(points_text)
+        slide = prs.slides.add_slide(prs.slide_layouts[5])
 
-def summarize_long_text(full_text: str) -> str:
-    chunks = split_text(full_text)
-    if len(chunks) <= 1:
-        return call_gemini(f"Summarize the following text in detail:\n\n{full_text}")
-    partial_summaries = []
-    for idx, ch in enumerate(chunks, start=1):
-        mapped = call_gemini(f"Summarize this part of a longer document:\n\n{ch}")
-        partial_summaries.append(f"Chunk {idx}:\n{mapped.strip()}")
-    combined = "\n\n".join(partial_summaries)
-    return call_gemini(f"Combine these summaries into one clean, well-structured summary:\n\n{combined}")
+        # Alternate background for contrast
+        bg_color = BG_LIGHT if idx % 2 == 0 else RGBColor(255, 255, 255)
+        fill = slide.background.fill
+        fill.solid()
+        fill.fore_color.rgb = bg_color
 
-def sanitize_filename(name: str) -> str:
-    return re.sub(r'[^A-Za-z0-9_.-]', '_', name)
+        # Slide Title
+        left, top, width, height = Inches(0.8), Inches(0.5), Inches(8), Inches(1.5)
+        textbox = slide.shapes.add_textbox(left, top, width, height)
+        tf = textbox.text_frame
+        tf.word_wrap = True
+        tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+        tf.vertical_anchor = MSO_VERTICAL_ANCHOR.MIDDLE
 
-def clean_title(title: str) -> str:
-    return re.sub(r"\s*\(.*?\)", "", title).strip()
+        p = tf.add_paragraph()
+        p.text = key_point
+        p.font.size = Pt(30)
+        p.font.bold = True
+        p.font.color.rgb = PRIMARY_PURPLE
+        p.alignment = PP_ALIGN.LEFT
 
-# ---------------- ROUTES ----------------
-@app.post("/chat")
-def chat(req: ChatRequest):
-    if "ppt" in req.message.lower() or "presentation" in req.message.lower():
-        return {"response": "📑 I can help you create a PPT! Tell me more details (topic, slides, etc.)."}
-    reply = call_gemini(req.message)
-    return {"response": reply}
+        # Accent underline
+        shape = slide.shapes.add_shape(
+            1, Inches(0.8), Inches(1.6), Inches(3), Inches(0.1)
+        )
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = SECONDARY_TEAL
+        shape.line.fill.background()
 
-@app.post("/generate-outline")
-def generate_outline(request: GeneratePPTRequest):
-    title = infer_title(request.description)
-    num_content_slides = extract_slide_count(request.description, default=5)
-    points = generate_outline_from_desc(request.description, num_content_slides)
-    return {"title": title, "slides": points}
+        # Description (bullets)
+        if description:
+            left, top, width, height = Inches(1), Inches(2.2), Inches(8), Inches(4)
+            textbox = slide.shapes.add_textbox(left, top, width, height)
+            tf = textbox.text_frame
+            tf.word_wrap = True
+            for line in description.split("\n"):
+                if line.strip():
+                    bullet = tf.add_paragraph()
+                    bullet.text = line.strip()
+                    bullet.font.size = Pt(22)
+                    bullet.font.color.rgb = TEXT_DARK
+                    bullet.level = 0
 
-@app.post("/edit-outline")
-def edit_outline(request: EditRequest):
-    outline_text = ""
-    for idx, slide in enumerate(request.outline.slides, start=1):
-        outline_text += f"Slide {idx}: {slide.title}\n"
-        for bullet in slide.description.split("\n"):
-            outline_text += f"- {bullet}\n"
-    prompt = f"""You are editing a PowerPoint outline.
-    Here is the outline:
-    {outline_text}
-    Feedback: "{request.feedback}"
-    Update the outline according to the feedback and return in the same format.
-    """
-    points_text = call_gemini(prompt)
-    points = parse_points(points_text)
-    return {"title": request.outline.title, "slides": points}
-
-@app.post("/generate-ppt")
-def generate_ppt(req: GeneratePPTRequest):
-    if req.outline:
-        title = clean_title(req.outline.title)
-        if len(title) > 80:
-            title = "Presentation"
-        points = [{"title": clean_title(s.title), "description": s.description} for s in req.outline.slides]
-    else:
-        title = clean_title(infer_title(req.description))
-        if len(title) > 80:
-            title = "Presentation"
-        num_content_slides = extract_slide_count(req.description, default=5)
-        points = generate_outline_from_desc(req.description, num_content_slides)
-
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_title = sanitize_filename(title.replace(" ", "_"))
-    if len(safe_title) > 40:
-        safe_title = "presentation"
-    filename = f"{safe_title}_{timestamp}.pptx"
-    create_ppt(title, points, filename=filename)
-
-    return FileResponse(filename, media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation", filename=filename)
-
-@app.get("/health")
-def health():
-    return {"status": "ok", "model": MODEL_NAME}
-
-@app.post("/upload/")
-async def upload(file: UploadFile = File(...)):
-    with tempfile.NamedTemporaryFile(delete=False) as tmp:
-        tmp.write(await file.read())
-        tmp_path = tmp.name
-
-    try:
-        text = extract_text(tmp_path, file.filename)
-    finally:
-        try:
-            os.remove(tmp_path)
-        except Exception:
-            pass
-
-    if not text or not text.strip():
-        raise HTTPException(status_code=400, detail="Unsupported, empty, or unreadable file content.")
-
-    try:
-        summary = summarize_long_text(text)
-        title = infer_title(summary) or os.path.splitext(file.filename)[0]
-        return {
-            "filename": file.filename,
-            "chars": len(text),
-            "chunks": len(split_text(text)),
-            "title": title,
-            "summary": summary,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Summarization failed: {e}")
+    prs.save(filename)
+    return filename
