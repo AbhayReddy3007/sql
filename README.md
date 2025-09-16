@@ -1,59 +1,66 @@
-from docx import Document
-from docx.shared import Pt, Inches
-from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
-from docx.oxml.ns import qn
-from docx.oxml import OxmlElement
-import re, os
-
-def clean_title_text(title: str) -> str:
-    """Clean up titles for document sections."""
-    if not title:
-        return "Document"
-    title = re.sub(r"\s+", " ", title.strip())
-    return title
-
-
-def create_doc(title, sections, filename="output.docx", images=None):
+# ---------------- EDIT OUTLINE ROUTES ----------------
+@app.post("/edit-ppt-outline")
+def edit_ppt_outline(req: EditRequest):
     """
-    Create a Word Document with optional images.
-    sections: list of {"title": str, "description": str}
-    images: list of file paths or None (one per section)
+    Refine an existing PPT outline based on user feedback.
     """
-    doc = Document()
+    outline_text = "\n".join(
+        [f"Slide {i+1}: {s.title}\n{s.description}" for i, s in enumerate(req.outline.slides)]
+    )
+    prompt = f"""
+    You are an assistant improving a PowerPoint outline.
 
-    # --- Title Page ---
-    doc.add_heading(clean_title_text(title), level=0)
-    doc.add_paragraph()
+    Current Outline:
+    Title: {req.outline.title}
+    {outline_text}
 
-    # --- Content Sections ---
-    for idx, section in enumerate(sections, start=1):
-        sec_title = clean_title_text(section.get("title", f"Section {idx}"))
-        description = section.get("description", "")
+    Feedback:
+    {req.feedback}
 
-        # Section Heading
-        heading = doc.add_heading(sec_title, level=1)
-        heading.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
+    Task:
+    - Apply the feedback to refine/improve the outline.
+    - Return the updated outline with the same format:
+      Slide 1: <Title>
+      - Bullet
+      - Bullet
+    - Do NOT add a title slide (I will handle it).
+    """
+    try:
+        updated_points = parse_points(call_vertex(prompt))
+        return {"title": req.outline.title, "slides": updated_points}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PPT outline editing failed: {e}")
 
-        # Section Content
-        for para in description.split("\n"):
-            if para.strip():
-                p = doc.add_paragraph(para.strip())
-                p.alignment = WD_PARAGRAPH_ALIGNMENT.JUSTIFY
-                run = p.runs[0]
-                run.font.size = Pt(11)
 
-        # Add Image if available
-        if images and idx - 1 < len(images) and images[idx - 1]:
-            try:
-                doc.add_paragraph()  # spacing before image
-                doc.add_picture(images[idx - 1], width=Inches(5.5))
-                last_paragraph = doc.paragraphs[-1]
-                last_paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-                doc.add_paragraph()  # spacing after image
-            except Exception as e:
-                print(f"⚠️ Failed to insert image for section {idx}: {e}")
+@app.post("/edit-doc-outline")
+def edit_doc_outline(req: EditDocRequest):
+    """
+    Refine an existing Document outline based on user feedback.
+    """
+    outline_text = "\n".join(
+        [f"Section {i+1}: {s.title}\n{s.description}" for i, s in enumerate(req.outline.sections)]
+    )
+    prompt = f"""
+    You are an assistant improving a Document outline.
 
-        doc.add_page_break()
+    Current Outline:
+    Title: {req.outline.title}
+    {outline_text}
 
-    doc.save(filename)
-    return filename
+    Feedback:
+    {req.feedback}
+
+    Task:
+    - Apply the feedback to refine/improve the outline.
+    - Return the updated outline with the same format:
+      Section 1: <Title>
+      <Paragraph 1>
+      <Paragraph 2>
+      <Paragraph 3>
+    - Avoid bullet points, use prose.
+    """
+    try:
+        updated_points = parse_points(call_vertex(prompt))
+        return {"title": req.outline.title, "sections": updated_points}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Doc outline editing failed: {e}")
