@@ -2,22 +2,25 @@ from pptx import Presentation
 from pptx.util import Pt, Inches
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN, MSO_AUTO_SIZE, MSO_VERTICAL_ANCHOR
-import re, os
+import re
+import os
 
 
 def clean_title_text(title: str) -> str:
     """Clean up titles for slides."""
     if not title:
         return "Presentation"
-    title = re.sub(r"\s+", " ", title.strip())
+    title = re.sub(r"\s+", " ", title.strip())  # collapse multiple spaces/newlines
     return title
 
 
 def create_ppt(title, points, filename="output.pptx", images=None):
     """
-    Create a PPT with optional images.
-    points: list of {"title": str, "description": str}
-    images: list of file paths or None (one per slide)
+    Create a PowerPoint presentation with optional images per slide.
+    :param title: Title of the PPT
+    :param points: List of {title, description} dicts
+    :param filename: Output .pptx file path
+    :param images: List of image file paths (one per slide). Can include None.
     """
     prs = Presentation()
 
@@ -45,14 +48,14 @@ def create_ppt(title, points, filename="output.pptx", images=None):
     tf = textbox.text_frame
     tf.word_wrap = True
     tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
-    tf.vertical_anchor = MSO_VERTICAL_ANCHOR.MIDDLE
+    tf.vertical_anchor = MSO_VERTICAL_ANCHOR.MIDDLE  # vertically center
 
     p = tf.add_paragraph()
     p.text = title
     p.font.size = Pt(40)
     p.font.bold = True
     p.font.color.rgb = RGBColor(255, 255, 255)
-    p.alignment = PP_ALIGN.CENTER
+    p.alignment = PP_ALIGN.CENTER  # horizontal center
 
     # --- Content Slides ---
     for idx, item in enumerate(points, start=1):
@@ -61,7 +64,7 @@ def create_ppt(title, points, filename="output.pptx", images=None):
 
         slide = prs.slides.add_slide(prs.slide_layouts[5])
 
-        # Alternate background
+        # Alternate background for contrast
         bg_color = BG_LIGHT if idx % 2 == 0 else RGBColor(255, 255, 255)
         fill = slide.background.fill
         fill.solid()
@@ -92,7 +95,7 @@ def create_ppt(title, points, filename="output.pptx", images=None):
 
         # Description (bullets)
         if description:
-            left, top, width, height = Inches(0.8), Inches(2.2), Inches(4.5), Inches(4)
+            left, top, width, height = Inches(1), Inches(2.2), Inches(5), Inches(4)
             textbox = slide.shapes.add_textbox(left, top, width, height)
             tf = textbox.text_frame
             tf.word_wrap = True
@@ -100,19 +103,19 @@ def create_ppt(title, points, filename="output.pptx", images=None):
                 if line.strip():
                     bullet = tf.add_paragraph()
                     bullet.text = line.strip()
-                    bullet.font.size = Pt(20)
+                    bullet.font.size = Pt(22)
                     bullet.font.color.rgb = TEXT_DARK
                     bullet.level = 0
 
-        # --- Add Image if available ---
+        # Insert Image (if available)
         if images and idx - 1 < len(images) and images[idx - 1]:
-            try:
-                img_path = images[idx - 1]
-                if os.path.exists(img_path):
-                    left, top, width, height = Inches(5.5), Inches(2.2), Inches(3.5), Inches(3.5)
-                    slide.shapes.add_picture(img_path, left, top, width, height)
-            except Exception as e:
-                print(f"⚠️ Failed to insert image on slide {idx}: {e}")
+            img_path = images[idx - 1]
+            if os.path.exists(img_path):
+                try:
+                    # Position image on the right side
+                    slide.shapes.add_picture(img_path, Inches(6.5), Inches(2), Inches(3), Inches(3))
+                except Exception as e:
+                    print(f"⚠️ Could not insert image for slide {idx}: {e}")
 
     prs.save(filename)
     return filename
