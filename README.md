@@ -4,14 +4,27 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
-import os, re, tempfile, fitz, docx, requests
+import os, re, datetime, tempfile, fitz, docx, base64
 
 from ppt_generator import create_ppt
+from doc_generator import create_doc
+
+import vertexai
+from vertexai.generative_models import GenerativeModel
+from vertexai.preview.vision_models import ImageGenerationModel
 
 # ---------------- CONFIG ----------------
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+PROJECT_ID = "drl-zenai-prod"  
+REGION = "us-central1"
 
+vertexai.init(project=PROJECT_ID, location=REGION)
+
+TEXT_MODEL_NAME = "gemini-2.0-flash"
+TEXT_MODEL = GenerativeModel(TEXT_MODEL_NAME)
+
+
+
+# ---------------- FASTAPI ----------------
 app = FastAPI()
 
 app.add_middleware(
@@ -34,35 +47,88 @@ class Slide(BaseModel):
     title: str
     description: str
 
+class Section(BaseModel):
+    title: str
+    description: str
+
 class Outline(BaseModel):
     title: str
     slides: List[Slide]
 
+
 class EditRequest(BaseModel):
     outline: Outline
     feedback: str
+
+
 
 class GeneratePPTRequest(BaseModel):
     description: str = ""
     outline: Optional[Outline] = None
 
 
+
+
 # ---------------- HELPERS ----------------
-def call_gemini(prompt: str) -> str:
-    headers = {"Authorization": f"Bearer {GEMINI_API_KEY}"}
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+def extract_slide_count(description: str, default: Optional[int] = None) -> Optional[int]:
+    m = re.search(r"(\d+)\s*(slides?|sections?|pages?)", description, re.IGNORECASE)
+    if m:
+        total = int(m.group(1))
+        return max(1, total - 1)
+    return None if default is None else default - 1
+
+def call_vertex(prompt: str) -> str:
     try:
-        resp = requests.post(GEMINI_URL, headers=headers, json=payload, timeout=120)
-        resp.raise_for_status()
-        data = resp.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        response = TEXT_MODEL.generate_content(prompt)
+        return response.text.strip()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gemini API error: {e}")
+        raise HTTPException(status_code=500, detail=f"Vertex AI text generation error: {e}")
+
+def generate_title(summary: str) -> str:
+    prompt = f"""Read the following summary and create a short, clear, presentation-style title.
+- Keep it under 10 words
+- Do not include birth dates, long sentences, or excessive details
+- Just give a clean title, like a presentation heading
+
+Summary:
+{summary}
+"""
+    return call_vertex(prompt).strip()
+
+def parse_points(points_text: str):
+    points = []
+    current_title, current_content = None, []
+    lines = [re.sub(r"[#*>`]", "", ln).rstrip() for ln in points_text.splitlines()]
+
+    for line in lines:
+        if not line or "Would you like" in line:
+            continue
+        m = re.match(r"^\s*(Slide|Section)\s*(\d+)\s*:\s*(.+)$", line, re.IGNORECASE)
+        if m:
+            if current_title:
+                points.append({"title": current_title, "description": "\n".join(current_content)})
+            current_title, current_content = m.group(3).strip(), []
+            continue
+        if line.strip().startswith("-"):
+            text = line.lstrip("-").strip()
+            if text:
+                current_content.append(f"• {text}")
+        elif line.strip().startswith(("•", "*")) or line.startswith("  "):
+            text = line.lstrip("•*").strip()
+            if text:
+                current_content.append(f"- {text}")
+        else:
+            if line.strip():
+                current_content.append(line.strip())
+
+    if current_title:
+        points.append({"title": current_title, "description": "\n".join(current_content)})
+    return points
 
 def extract_text(path: str, filename: str) -> str:
     name = filename.lower()
     if name.endswith(".pdf"):
-        text_parts = []
+        text_parts: List[str] = []
         doc = fitz.open(path)
         try:
             for page in doc:
@@ -74,14 +140,20 @@ def extract_text(path: str, filename: str) -> str:
         d = docx.Document(path)
         return "\n".join(p.text for p in d.paragraphs)
     if name.endswith(".txt"):
+        for enc in ("utf-8", "utf-16", "utf-16-le", "utf-16-be", "latin-1"):
+            try:
+                with open(path, "r", encoding=enc) as f:
+                    return f.read()
+            except UnicodeDecodeError:
+                continue
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             return f.read()
     return ""
 
-def split_text(text: str, chunk_size: int = 8000, overlap: int = 300):
+def split_text(text: str, chunk_size: int = 8000, overlap: int = 300) -> List[str]:
     if not text:
         return []
-    chunks = []
+    chunks: List[str] = []
     start = 0
     n = len(text)
     while start < n:
@@ -92,74 +164,123 @@ def split_text(text: str, chunk_size: int = 8000, overlap: int = 300):
         start = max(0, end - overlap)
     return chunks
 
+def generate_outline_from_desc(description: str, num_items: Optional[int], mode: str = "ppt"):
+    if num_items:
+        if mode == "ppt":
+            prompt = f"""Create a PowerPoint outline on: {description}.
+Generate exactly {num_items} content slides (⚠️ excluding the title slide).
+Do NOT include a title slide — I will handle it separately.
+Start from Slide 1 as the first *content slide*.
+Format strictly like this:
+Slide 1: <Title>
+- Bullet
+- Bullet
+- Bullet
+"""
+        else:
+            prompt = f"""Create a detailed Document outline on: {description}.
+Generate exactly {num_items} sections (treat each section as roughly one page).
+Each section should have:
+- A section title
+- 2–3 descriptive paragraphs (5–7 sentences each).
+Do NOT use bullet points.
+Format strictly like this:
+Section 1: <Title>
+<Paragraph 1>
+<Paragraph 2>
+<Paragraph 3>
+"""
+    else:
+        if mode == "ppt":
+            prompt = f"""Create a PowerPoint outline on: {description}.
+Decide the most appropriate number of content slides (⚠️ excluding the title slide).
+Each slide should have a short title and 3–4 bullet points.
+The short title should be a single line not a double line
+Do NOT include a title slide — I will handle it separately.
+Format strictly like this:
+Slide 1: <Title>
+- Bullet
+- Bullet
+- Bullet
+"""
+        else:
+            prompt = f"""Create a detailed Document outline on: {description}.
+Decide the most appropriate number of sections (treat each section as roughly one page).
+Each section should have:
+- A section title
+- 2–3 descriptive paragraphs (5–7 sentences each).
+Do NOT use bullet points.
+Format strictly like this:
+Section 1: <Title>
+<Paragraphs...>
+"""
+    points_text = call_vertex(prompt)
+    return parse_points(points_text)
+
 def summarize_long_text(full_text: str) -> str:
     chunks = split_text(full_text)
     if len(chunks) <= 1:
-        return call_gemini(f"Summarize the following text in detail:\n\n{full_text}")
+        return call_vertex(f"Summarize the following text in detail:\n\n{full_text}")
     partial_summaries = []
     for idx, ch in enumerate(chunks, start=1):
-        mapped = call_gemini(f"Summarize this part of a longer document:\n\n{ch}")
+        mapped = call_vertex(f"Summarize this part of a longer document:\n\n{ch}")
         partial_summaries.append(f"Chunk {idx}:\n{mapped.strip()}")
     combined = "\n\n".join(partial_summaries)
-    return call_gemini(f"Combine these summaries into one clean, well-structured summary:\n\n{combined}")
+    return call_vertex(f"Combine these summaries into one clean, well-structured summary:\n\n{combined}")
 
-def extract_slide_count(description: str, default: Optional[int] = None) -> Optional[int]:
-    m = re.search(r"(\d+)\s*(slides?|sections?|pages?)", description, re.IGNORECASE)
-    if m:
-        total = int(m.group(1))
-        return max(1, total - 1)
-    return None if default is None else default - 1
+def sanitize_filename(name: str) -> str:
+    return re.sub(r'[^A-Za-z0-9_.-]', '_', name)
 
-def generate_title(summary: str) -> str:
-    prompt = f"Create a short presentation title (under 10 words) for: {summary}"
-    return call_gemini(prompt)
+def clean_title(title: str) -> str:
+    return re.sub(r"\s*\(.*?\)", "", title).strip()
 
-def parse_points(points_text: str):
-    points = []
-    current_title, current_content = None, []
-    lines = [re.sub(r"[#*>`]", "", ln).rstrip() for ln in points_text.splitlines()]
+def save_temp_image(image_bytes, idx, title):
+    output_dir = os.path.join(os.path.dirname(__file__), "generated_files", "images")
+    os.makedirs(output_dir, exist_ok=True)
+    safe_title = re.sub(r'[^A-Za-z0-9_.-]', '_', title)[:30]
+    filename = f"{safe_title}_{idx}.png"
+    filepath = os.path.join(output_dir, filename)
+    with open(filepath, "wb") as f:
+        f.write(image_bytes)
+    return filepath
 
-    for line in lines:
-        if not line: continue
-        m = re.match(r"^\s*Slide\s*(\d+)\s*:\s*(.+)$", line, re.IGNORECASE)
-        if m:
-            if current_title:
-                points.append({"title": current_title, "description": "\n".join(current_content)})
-            current_title, current_content = m.group(2).strip(), []
-            continue
-        if line.strip().startswith("-"):
-            current_content.append("• " + line.lstrip("-").strip())
-        else:
-            current_content.append(line.strip())
-    if current_title:
-        points.append({"title": current_title, "description": "\n".join(current_content)})
-    return points
+def should_generate_image(title: str, description: str) -> bool:
+    """
+    Decide if a slide/section really needs an image.
+    Images should only be generated when a visual will
+    add significant clarity (e.g., charts, diagrams, processes, comparisons).
+    Avoid images for generic intro, text-heavy, or conclusion slides.
+    """
+    prompt = f"""
+    You are deciding if an image is TRULY necessary for a presentation slide.
 
-def generate_outline_from_desc(description: str, num_items: Optional[int]):
-    if num_items:
-        prompt = f"""Create a PowerPoint outline on: {description}.
-Generate exactly {num_items} content slides (excluding the title slide).
-Format strictly like:
-Slide 1: <Title>
-- Bullet
-- Bullet
-"""
-    else:
-        prompt = f"""Create a PowerPoint outline on: {description}.
-Pick the most appropriate number of content slides (excluding the title slide).
-Format strictly like:
-Slide 1: <Title>
-- Bullet
-- Bullet
-"""
-    points_text = call_gemini(prompt)
-    return parse_points(points_text)
+    Title: {title}
+    Content: {description}
+
+    Rules:
+    - Say "YES" ONLY if a clear visual, diagram, chart, or illustration
+      would help explain this content.
+    - Say "NO" for general text slides, introductions, conclusions,
+      or content that does not need a visual.
+    - Avoid making every slide have an image.
+
+    Answer strictly with YES or NO.
+    """
+
+    try:
+        decision = call_vertex(prompt).strip().upper()
+        return decision.startswith("Y")
+    except:
+        return False
+
+
+
 
 
 # ---------------- ROUTES ----------------
 @app.post("/chat")
 def chat(req: ChatRequest):
-    reply = call_gemini(req.message)
+    reply = call_vertex(req.message)
     return {"response": reply}
 
 @app.post("/upload/")
@@ -170,9 +291,10 @@ async def upload(file: UploadFile = File(...)):
     try:
         text = extract_text(tmp_path, file.filename)
     finally:
-        os.remove(tmp_path)
-    if not text.strip():
-        raise HTTPException(status_code=400, detail="Unsupported or empty file.")
+        try: os.remove(tmp_path)
+        except Exception: pass
+    if not text or not text.strip():
+        raise HTTPException(status_code=400, detail="Unsupported, empty, or unreadable file content.")
     try:
         summary = summarize_long_text(text)
         title = generate_title(summary) or os.path.splitext(file.filename)[0]
@@ -185,6 +307,39 @@ async def upload(file: UploadFile = File(...)):
         }
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Summarization failed: {e}")
+
+@app.post("/generate-ppt-outline")
+def generate_ppt_outline(request: GeneratePPTRequest):
+    title = generate_title(request.description)
+    num_content_slides = extract_slide_count(request.description, default=None)
+    points = generate_outline_from_desc(request.description, num_content_slides, mode="ppt")
+    return {"title": title, "slides": points}
+
+@app.post("/generate-ppt")
+def generate_ppt(req: GeneratePPTRequest):
+    if req.outline:
+        title = clean_title(req.outline.title) or "Presentation"
+        points = [{"title": clean_title(s.title), "description": s.description} for s in req.outline.slides]
+    else:
+        title = clean_title(generate_title(req.description))
+        num_content_slides = extract_slide_count(req.description, default=None)
+        points = generate_outline_from_desc(req.description, num_content_slides, mode="ppt")
+
+
+    output_dir = os.path.join(os.path.dirname(__file__), "generated_files")
+    os.makedirs(output_dir, exist_ok=True)
+    filename = os.path.join(output_dir, f"{sanitize_filename(title)}.pptx")
+
+    create_ppt(title, points, filename=filename)
+
+    return FileResponse(filename,
+        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        filename=os.path.basename(filename)
+    )
+
+
+
+
 
 @app.post("/chat-doc")
 def chat_with_doc(req: ChatDocRequest):
@@ -199,38 +354,16 @@ def chat_with_doc(req: ChatDocRequest):
     Answer clearly and concisely using only the document content.
     """
     try:
-        reply = call_gemini(prompt)
+        reply = call_vertex(prompt)
         return {"response": reply}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Chat-with-doc failed: {e}")
 
-@app.post("/generate-ppt-outline")
-def generate_ppt_outline(request: GeneratePPTRequest):
-    title = generate_title(request.description)
-    num_content_slides = extract_slide_count(request.description, default=None)
-    points = generate_outline_from_desc(request.description, num_content_slides)
-    return {"title": title, "slides": points}
 
-@app.post("/generate-ppt")
-def generate_ppt(req: GeneratePPTRequest):
-    if req.outline:
-        title = req.outline.title or "Presentation"
-        points = [{"title": s.title, "description": s.description} for s in req.outline.slides]
-    else:
-        title = generate_title(req.description)
-        num_content_slides = extract_slide_count(req.description, default=None)
-        points = generate_outline_from_desc(req.description, num_content_slides)
 
-    output_dir = os.path.join(os.path.dirname(__file__), "generated_files")
-    os.makedirs(output_dir, exist_ok=True)
-    filename = os.path.join(output_dir, f"{re.sub(r'[^A-Za-z0-9_.-]', '_', title)}.pptx")
-
-    create_ppt(title, points, filename=filename)
-
-    return FileResponse(filename,
-        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        filename=os.path.basename(filename)
-    )
+@app.get("/health")
+def health():
+    return {"status": "ok", "text_model": TEXT_MODEL_NAME}
 
 @app.post("/edit-ppt-outline")
 def edit_ppt_outline(req: EditRequest):
@@ -238,7 +371,7 @@ def edit_ppt_outline(req: EditRequest):
         [f"Slide {i+1}: {s.title}\n{s.description}" for i, s in enumerate(req.outline.slides)]
     )
     prompt = f"""
-    Improve this PPT outline based on feedback.
+    You are an assistant improving a PowerPoint outline.
 
     Current Outline:
     Title: {req.outline.title}
@@ -247,36 +380,71 @@ def edit_ppt_outline(req: EditRequest):
     Feedback:
     {req.feedback}
 
-    Return strictly in this format:
-    Slide 1: <Title>
-    - Bullet
-    - Bullet
+    Task:
+    - Apply the feedback to refine/improve the outline.
+    - Return the updated outline with the same format:
+      Slide 1: <Title>
+      - Bullet
+      - Bullet
+    - Do NOT add a title slide (I will handle it).
     """
-    updated_points = parse_points(call_gemini(prompt))
-    return {"title": req.outline.title, "slides": updated_points}
+    try:
+        updated_points = parse_points(call_vertex(prompt))
+        return {"title": req.outline.title, "slides": updated_points}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PPT outline editing failed: {e}")
 
-@app.get("/health")
-def health():
-    return {"status": "ok", "text_model": "gemini-2.0-flash"}
+
 
 app.py
 import copy
 import requests
 import streamlit as st
 
-BACKEND_URL = "http://127.0.0.1:8000"
+BACKEND_URL = "http://127.0.0.1:8000"  
 
-st.set_page_config(page_title="AI PPT Generator", layout="wide")
-st.title("💡 Chatbot (PPT Generator)")
+st.set_page_config(page_title="AI Productivity Suite", layout="wide")
+st.title("Chatbot")
+
+# ---------------- Helpers ----------------
+def extract_filename_from_cd(resp):
+    cd = resp.headers.get("content-disposition", "")
+    if "filename=" in cd:
+        return cd.split("filename=")[-1].strip().strip('"')
+    return None
+
+def render_outline_preview(outline_data, mode="ppt"):
+    if not outline_data:
+        st.info("No outline available.")
+        return False
+
+    title = outline_data.get("title", "Untitled")
+    items = outline_data.get("slides", []) if mode == "ppt" else outline_data.get("sections", [])
+    st.subheader(f"📝 Preview Outline: {title}")
+
+    for idx, item in enumerate(items, start=1):
+        item_title = item.get("title", f"{'Slide' if mode=='ppt' else 'Section'} {idx}")
+        item_desc = item.get("description", "")
+        with st.expander(f"{'Slide' if mode=='ppt' else 'Section'} {idx}: {item_title}", expanded=False):
+            st.markdown(item_desc.replace("\n", "\n\n"))
+    return len(items) > 0
+
 
 # ---------------- STATE ----------------
-if "messages" not in st.session_state: st.session_state.messages = []
-if "outline_chat" not in st.session_state: st.session_state.outline_chat = None
-if "generated_files" not in st.session_state: st.session_state.generated_files = []
-if "summary_text" not in st.session_state: st.session_state.summary_text = None
-if "summary_title" not in st.session_state: st.session_state.summary_title = None
-if "doc_chat_history" not in st.session_state: st.session_state.doc_chat_history = []
-if "outline_from_summary" not in st.session_state: st.session_state.outline_from_summary = None
+defaults = {
+    "messages": [],
+    "outline_chat": None,
+    "outline_mode": None,  # "ppt" or "doc"
+    "generated_files": [],
+    "summary_text": None,
+    "summary_title": None,
+    "doc_chat_history": [],
+    "outline_from_summary": None,
+    "generated_images": [],  # store past generated images
+}
+for key, val in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = val
 
 
 # ---------------- CHAT HISTORY ----------------
@@ -284,20 +452,43 @@ for role, content in st.session_state.messages:
     with st.chat_message(role):
         st.markdown(content)
 
-# ---------------- PAST GENERATED FILES ----------------
+# ---------------- Past Generated Files ----------------
 for i, file_info in enumerate(st.session_state.generated_files):
     with st.chat_message("assistant"):
-        st.markdown("✅ PPT generated earlier!")
+        if file_info["type"] == "ppt":
+            st.markdown("✅ PPT generated earlier! Download below:")
+            st.download_button(
+                "⬇️ Download PPT",
+                data=file_info["content"] if file_info["content"] else b"",
+                file_name=file_info["filename"],
+                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                key=f"past_download_ppt_{i}"
+            )
+        elif file_info["type"] == "doc":
+            st.markdown("✅ Document generated earlier! Download below:")
+            st.download_button(
+                "⬇️ Download Document",
+                data=file_info["content"] if file_info["content"] else b"",
+                file_name=file_info["filename"],
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                key=f"past_download_doc_{i}"
+            )
+
+# ---------------- Past Generated Images ----------------
+for i, img_info in enumerate(st.session_state.generated_images):
+    with st.chat_message("assistant"):
+        st.markdown("🖼️ Image generated earlier:")
+        st.image(img_info["content"], caption=img_info["filename"], use_container_width=True)
         st.download_button(
-            "⬇️ Download PPT",
-            data=file_info["content"],
-            file_name=file_info["filename"],
-            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            key=f"past_download_ppt_{i}"
+            "⬇️ Download Image",
+            data=img_info["content"],
+            file_name=img_info["filename"],
+            mime="image/png",
+            key=f"past_download_img_{i}"
         )
 
 # ---------------- GENERAL CHAT ----------------
-if prompt := st.chat_input("Type a message or ask for a PPT..."):
+if prompt := st.chat_input("Type a message, ask for a PPT or DOC..."):
     st.session_state.messages.append(("user", prompt))
     text = prompt.lower()
 
@@ -307,9 +498,50 @@ if prompt := st.chat_input("Type a message or ask for a PPT..."):
                 resp = requests.post(f"{BACKEND_URL}/generate-ppt-outline", json={"description": prompt}, timeout=120)
                 if resp.status_code == 200:
                     st.session_state.outline_chat = resp.json()
+                    st.session_state.outline_mode = "ppt"
                     st.session_state.messages.append(("assistant", "✅ PPT outline generated! Preview below."))
                 else:
                     st.session_state.messages.append(("assistant", f"❌ PPT outline failed: {resp.text}"))
+
+        elif "doc" in text or "document" in text or "report" in text or "pages" in text or "sections" in text:
+            with st.spinner("Generating DOC outline..."):
+                resp = requests.post(f"{BACKEND_URL}/generate-doc-outline", json={"description": prompt}, timeout=120)
+                if resp.status_code == 200:
+                    st.session_state.outline_chat = resp.json()
+                    st.session_state.outline_mode = "doc"
+                    st.session_state.messages.append(("assistant", "✅ DOC outline generated! Preview below."))
+                else:
+                    st.session_state.messages.append(("assistant", f"❌ DOC outline failed: {resp.text}"))
+
+        elif "image" in text or "picture" in text or "photo" in text:
+            with st.spinner("Generating Image..."):
+                resp = requests.post(f"{BACKEND_URL}/generate-image", json={"prompt": prompt}, timeout=180)
+                if resp.status_code == 200:
+                    img_bytes = resp.content
+                    filename = extract_filename_from_cd(resp) or f"image_{len(st.session_state.generated_images)+1}.png"
+
+                    # Store image
+                    st.session_state.generated_images.append({
+                        "filename": filename,
+                        "content": img_bytes,
+                    })
+
+                    # Show image directly
+                    st.image(img_bytes, caption=filename, use_container_width=True)
+
+                    # Download button
+                    st.download_button(
+                        "⬇️ Download Image",
+                        data=img_bytes,
+                        file_name=filename,
+                        mime="image/png",
+                        key=f"download_img_{filename}"
+                    )
+
+                    st.session_state.messages.append(("assistant", "✅ Image generated!"))
+                else:
+                    st.session_state.messages.append(("assistant", f"❌ Image generation failed: {resp.text}"))
+
         else:
             resp = requests.post(f"{BACKEND_URL}/chat", json={"message": prompt}, timeout=60)
             bot_reply = resp.json().get("response", "⚠️ Error")
@@ -320,62 +552,75 @@ if prompt := st.chat_input("Type a message or ask for a PPT..."):
 
     st.rerun()
 
-
 # ---------------- OUTLINE PREVIEW + ACTIONS ----------------
 if st.session_state.outline_chat:
+    mode = st.session_state.outline_mode
     outline = st.session_state.outline_chat
-    st.subheader(f"📝 Preview Outline: {outline.get('title','Untitled')}")
 
-    for idx, slide in enumerate(outline.get("slides", []), start=1):
-        with st.expander(f"Slide {idx}: {slide['title']}", expanded=False):
-            st.markdown(slide["description"].replace("\n", "\n\n"))
+    render_outline_preview(outline, mode=mode)
 
-    new_title = st.text_input("📌 Edit Title", value=outline.get("title", "Untitled"))
-    feedback_box = st.text_area("✏️ Feedback for outline (optional):")
-
+    new_title = st.text_input("📌 Edit Title", value=outline.get("title", "Untitled"), key=f"title_{mode}")
+    feedback_box = st.text_area("✏️ Feedback for outline (optional):", value="", key=f"feedback_chat_{mode}")
     col1, col2 = st.columns(2)
 
     with col1:
         if st.button("🔄 Apply Feedback"):
             with st.spinner("Updating outline..."):
-                edit_payload = {"outline": outline, "feedback": feedback_box}
-                resp = requests.post(f"{BACKEND_URL}/edit-ppt-outline", json=edit_payload, timeout=120)
-                if resp.status_code == 200:
-                    updated_outline = resp.json()
-                    updated_outline["title"] = new_title.strip()
-                    st.session_state.outline_chat = updated_outline
-                    st.success("✅ Outline updated!")
-                    st.rerun()
-                else:
-                    st.error(f"❌ Edit failed: {resp.text}")
+                try:
+                    edit_payload = {"outline": outline, "feedback": feedback_box}
+                    endpoint = f"{BACKEND_URL}/edit-ppt-outline" if mode == "ppt" else f"{BACKEND_URL}/edit-doc-outline"
+                    resp = requests.post(endpoint, json=edit_payload, timeout=120)
+                    if resp.status_code == 200:
+                        updated_outline = resp.json()
+                        updated_outline["title"] = new_title.strip() if new_title else updated_outline["title"]
+                        st.session_state.outline_chat = updated_outline
+                        st.success("✅ Outline updated!")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ Edit failed: {resp.status_code} — {resp.text}")
+                except Exception as e:
+                    st.error(f"❌ Edit error: {e}")
 
     with col2:
-        if st.button("✅ Generate PPT"):
-            with st.spinner("Generating PPT..."):
-                outline_to_send = copy.deepcopy(outline)
-                outline_to_send["title"] = new_title.strip()
-                resp = requests.post(f"{BACKEND_URL}/generate-ppt", json={"outline": outline_to_send}, timeout=180)
-                if resp.status_code == 200:
-                    filename = resp.headers.get("content-disposition","").split("filename=")[-1].strip('"') or "presentation.pptx"
-                    st.success("✅ PPT generated successfully!")
-                    st.download_button(
-                        "⬇️ Download PPT",
-                        data=resp.content,
-                        file_name=filename,
-                        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                    )
-                    st.session_state.generated_files.append({
-                        "type": "ppt",
-                        "filename": filename,
-                        "content": resp.content,
-                    })
-                    st.session_state.outline_chat = None
-                else:
-                    st.error(f"❌ Generation failed: {resp.text}")
+        if st.button(f"✅ Generate {mode.upper()}"):
+            with st.spinner(f"Generating {mode.upper()}..."):
+                try:
+                    outline_to_send = copy.deepcopy(outline)
+                    outline_to_send["title"] = new_title.strip() if new_title else outline_to_send["title"]
+
+                    endpoint = f"{BACKEND_URL}/generate-ppt" if mode == "ppt" else f"{BACKEND_URL}/generate-doc"
+                    resp = requests.post(endpoint, json={"outline": outline_to_send}, timeout=180)
+                    if resp.status_code == 200:
+                        filename = extract_filename_from_cd(resp) or (
+                            "presentation.pptx" if mode == "ppt" else "document.docx"
+                        )
+
+                        st.success(f"✅ {mode.upper()} generated successfully!")
+                        st.download_button(
+                            f"⬇️ Download {mode.upper()}",
+                            data=resp.content if resp.content else b"",
+                            file_name=filename,
+                            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                                 if mode == "ppt"
+                                 else "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            key=f"download_{mode}_{filename}"
+                        )
+
+                        st.session_state.generated_files.append({
+                            "type": mode,
+                            "filename": filename,
+                            "content": resp.content,
+                        })
+
+                        st.session_state.outline_chat = None
+                    else:
+                        st.error(f"❌ Generation failed: {resp.status_code} — {resp.text}")
+                except Exception as e:
+                    st.error(f"❌ Generation error: {e}")
 
 
 # ---------------- DOC UPLOAD SECTION ----------------
-uploaded_file = st.file_uploader("📂 Upload a document", type=["pdf", "docx", "txt"])
+uploaded_file = st.file_uploader("📂 Upload a document", type=["pdf", "docx", "txt", "md"])
 
 if uploaded_file is not None:
     with st.spinner("Processing uploaded file..."):
@@ -417,9 +662,27 @@ if st.session_state.summary_text:
                         outline_data = resp.json()
                         outline_data["title"] = st.session_state.summary_title
                         st.session_state.outline_from_summary = outline_data
+                        st.session_state.outline_mode = "ppt"
                         st.session_state.doc_chat_history.append(("assistant", "✅ Generated PPT outline from document. Preview below."))
                     else:
                         st.session_state.doc_chat_history.append(("assistant", f"❌ PPT outline failed: {resp.text}"))
+
+            elif "doc" in text or "document" in text or "report" in text or "pages" in text or "sections" in text:
+                with st.spinner("Generating DOC outline from document..."):
+                    resp = requests.post(
+                        f"{BACKEND_URL}/generate-doc-outline",
+                        json={"description": st.session_state.summary_text + "\n\n" + doc_prompt},
+                        timeout=180,
+                    )
+                    if resp.status_code == 200:
+                        outline_data = resp.json()
+                        outline_data["title"] = st.session_state.summary_title
+                        st.session_state.outline_from_summary = outline_data
+                        st.session_state.outline_mode = "doc"
+                        st.session_state.doc_chat_history.append(("assistant", "✅ Generated DOC outline from document. Preview below."))
+                    else:
+                        st.session_state.doc_chat_history.append(("assistant", f"❌ DOC outline failed: {resp.text}"))
+
             else:
                 resp = requests.post(
                     f"{BACKEND_URL}/chat-doc",
@@ -440,49 +703,55 @@ if st.session_state.summary_text:
 
 # ---------------- OUTLINE FROM UPLOAD ----------------
 if st.session_state.outline_from_summary:
+    mode = st.session_state.outline_mode
     outline_preview = st.session_state.outline_from_summary
-    st.subheader(f"📝 Preview Outline from Document: {outline_preview.get('title','Untitled')}")
 
-    for idx, slide in enumerate(outline_preview.get("slides", []), start=1):
-        with st.expander(f"Slide {idx}: {slide['title']}", expanded=False):
-            st.markdown(slide["description"].replace("\n", "\n\n"))
+    render_outline_preview(outline_preview, mode=mode)
 
-    new_title_upload = st.text_input("📌 Edit Title (Upload Flow)", value=outline_preview.get("title", "Untitled"))
-    feedback_box = st.text_area("✏️ Feedback for outline (optional):")
-
+    new_title_upload = st.text_input("📌 Edit Title (Upload Flow)", value=outline_preview.get("title", "Untitled"), key=f"title_upload_{mode}")
+    feedback_box = st.text_area("✏️ Feedback for outline (optional):", value="", key=f"feedback_upload_{mode}")
     col1, col2 = st.columns(2)
 
     with col1:
         if st.button("🔄 Apply Feedback (Upload Flow)"):
             with st.spinner("Applying feedback..."):
                 edit_payload = {"outline": outline_preview, "feedback": feedback_box}
-                edit_resp = requests.post(f"{BACKEND_URL}/edit-ppt-outline", json=edit_payload, timeout=120)
+                endpoint = f"{BACKEND_URL}/edit-ppt-outline" if mode == "ppt" else f"{BACKEND_URL}/edit-doc-outline"
+                edit_resp = requests.post(endpoint, json=edit_payload, timeout=120)
                 if edit_resp.status_code == 200:
                     updated_outline = edit_resp.json()
-                    updated_outline["title"] = new_title_upload.strip()
+                    updated_outline["title"] = new_title_upload.strip() if new_title_upload else updated_outline["title"]
                     st.session_state.outline_from_summary = updated_outline
                     st.success("✅ Outline updated")
                 else:
                     st.error(f"❌ Edit failed: {edit_resp.status_code} — {edit_resp.text}")
 
     with col2:
-        if st.button("✅ Generate PPT (Upload Flow)"):
-            with st.spinner("Generating PPT..."):
+        if st.button(f"✅ Generate {mode.upper()} (Upload Flow)"):
+            with st.spinner(f"Generating {mode.upper()}..."):
                 outline_to_send = copy.deepcopy(outline_preview)
-                outline_to_send["title"] = new_title_upload.strip()
-                file_resp = requests.post(f"{BACKEND_URL}/generate-ppt", json={"outline": outline_to_send}, timeout=180)
+                outline_to_send["title"] = new_title_upload.strip() if new_title_upload else outline_to_send["title"]
+
+                endpoint = f"{BACKEND_URL}/generate-ppt" if mode == "ppt" else f"{BACKEND_URL}/generate-doc"
+                file_resp = requests.post(endpoint, json={"outline": outline_to_send}, timeout=180)
                 if file_resp.status_code == 200:
-                    filename = file_resp.headers.get("content-disposition","").split("filename=")[-1].strip('"') or "presentation.pptx"
-                    st.success("✅ PPT generated successfully!")
-                    st.download_button(
-                        "⬇️ Download PPT",
-                        data=file_resp.content,
-                        file_name=filename,
-                        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                        key=f"download_upload_ppt_{filename}"
+                    filename = extract_filename_from_cd(file_resp) or (
+                        "presentation.pptx" if mode == "ppt" else "document.docx"
                     )
+
+                    st.success(f"✅ {mode.upper()} generated successfully!")
+                    st.download_button(
+                        f"⬇️ Download {mode.upper()}",
+                        data=file_resp.content if file_resp.content else b"",
+                        file_name=filename,
+                        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                             if mode == "ppt"
+                             else "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        key=f"download_upload_{mode}_{filename}"
+                    )
+
                     st.session_state.generated_files.append({
-                        "type": "ppt",
+                        "type": mode,
                         "filename": filename,
                         "content": file_resp.content,
                     })
@@ -490,103 +759,8 @@ if st.session_state.outline_from_summary:
                     st.error(f"❌ Generation failed: {file_resp.status_code} — {file_resp.text}")
 
 
-ppt_generator.py
-from pptx import Presentation
-from pptx.util import Inches, Pt
-from pptx.dml.color import RGBColor
 
 
-def create_ppt(title: str, slides: list, filename: str, branding: dict = None):
-    """
-    Generate a PowerPoint file styled similar to Dr. Reddy's corporate presentations.
-    """
-
-    prs = Presentation()
-
-    # Default branding
-    if branding is None:
-        branding = {
-            "primary_color": (83, 27, 147),      # Dr. Reddy’s purple
-            "accent_color": (255, 102, 0),       # Orange accent
-            "font_name": "Calibri",
-            "logo_path": None,
-            "title_font_size": Pt(44),
-            "heading_font_size": Pt(28),
-            "body_font_size": Pt(18),
-        }
-
-    # ---- Title Slide ----
-    title_slide_layout = prs.slide_layouts[0]
-    slide0 = prs.slides.add_slide(title_slide_layout)
-    title_shape = slide0.shapes.title
-    subtitle_shape = slide0.placeholders[1]
-
-    title_shape.text = title
-    tpara = title_shape.text_frame.paragraphs[0]
-    tpara.font.size = branding["title_font_size"]
-    tpara.font.bold = True
-    tpara.font.color.rgb = RGBColor(*branding["primary_color"])
-    tpara.font.name = branding["font_name"]
-
-    subtitle_shape.text = "Corporate Presentation"
-    spara = subtitle_shape.text_frame.paragraphs[0]
-    spara.font.size = Pt(20)
-    spara.font.color.rgb = RGBColor(100, 100, 100)
-
-    if branding.get("logo_path"):
-        try:
-            left = prs.slide_width - Inches(2)
-            top = Inches(0.3)
-            height = Inches(1)
-            slide0.shapes.add_picture(branding["logo_path"], left, top, height=height)
-        except Exception as e:
-            print(f"⚠️ Could not add logo: {e}")
-
-    # ---- Content Slides ----
-    content_layout = prs.slide_layouts[1]
-
-    for s in slides:
-        slide = prs.slides.add_slide(content_layout)
-
-        # Title
-        title_sh = slide.shapes.title
-        title_sh.text = s["title"]
-        para = title_sh.text_frame.paragraphs[0]
-        para.font.size = branding["heading_font_size"]
-        para.font.bold = True
-        para.font.color.rgb = RGBColor(*branding["primary_color"])
-        para.font.name = branding["font_name"]
-
-        # Body
-        content_sh = slide.shapes.placeholders[1]
-        content_tf = content_sh.text_frame
-        content_tf.clear()
-
-        for line in s["description"].split("\n"):
-            stripped = line.strip()
-            if not stripped:
-                continue
-            p = content_tf.add_paragraph()
-            p.text = stripped
-            p.font.size = branding["body_font_size"]
-            p.font.color.rgb = RGBColor(60, 60, 60)
-            p.font.name = branding["font_name"]
-            p.level = 0
-
-    # ---- Footer with slide numbers ----
-    for i, slide in enumerate(prs.slides):
-        left = prs.slide_width - Inches(1)
-        top = prs.slide_height - Inches(0.5)
-        txBox = slide.shapes.add_textbox(left, top, Inches(1), Inches(0.3))
-        tf = txBox.text_frame
-        p = tf.paragraphs[0]
-        p.text = str(i)
-        p.font.size = Pt(12)
-        p.font.color.rgb = RGBColor(150, 150, 150)
-        p.font.name = branding["font_name"]
-
-    prs.save(filename)
-    return filename
 
 
 
