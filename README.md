@@ -32,44 +32,87 @@ def render_outline_preview(outline_data):
 
 # ---------------- STATE ----------------
 defaults = {
-    "messages": [],
-    "outline_chat": None,
-    "generated_files": [],
-    "summary_text": None,
-    "summary_title": None,
-    "doc_chat_history": [],
+    "messages": [],            # general chat
+    "outline_chat": None,      # ppt outline
+    "generated_files": [],     # past generated files
+    "summary_text": None,      # uploaded doc summary
+    "summary_title": None,     # uploaded doc title
+    "doc_chat_history": [],    # chat with doc
 }
 for key, val in defaults.items():
     if key not in st.session_state:
         st.session_state[key] = val
 
 
-# ---------------- CHAT HISTORY ----------------
+# ---------------- DISPLAY PAST CHAT ----------------
 for role, content in st.session_state.messages:
     with st.chat_message(role):
         st.markdown(content)
 
+for role, content in st.session_state.doc_chat_history:
+    with st.chat_message(role):
+        st.markdown(content)
 
-# ---------------- GENERAL CHAT ----------------
-if prompt := st.chat_input("💬 Type a message, ask for a PPT..."):
-    st.session_state.messages.append(("user", prompt))
-    text = prompt.lower()
 
-    try:
-        if "ppt" in text or "presentation" in text or "slides" in text:
-            with st.spinner("Generating PPT outline..."):
-                resp = requests.post(f"{BACKEND_URL}/generate-ppt-outline", json={"description": prompt}, timeout=120)
-                if resp.status_code == 200:
-                    st.session_state.outline_chat = resp.json()
-                    st.session_state.messages.append(("assistant", "✅ PPT outline generated! Preview below."))
-                else:
-                    st.session_state.messages.append(("assistant", f"❌ PPT outline failed: {resp.text}"))
-        else:
-            resp = requests.post(f"{BACKEND_URL}/chat", json={"message": prompt}, timeout=60)
-            bot_reply = resp.json().get("response", "⚠️ Error")
-            st.session_state.messages.append(("assistant", bot_reply))
-    except Exception as e:
-        st.session_state.messages.append(("assistant", f"⚠️ Backend error: {e}"))
+# ---------------- FILE UPLOAD SECTION ----------------
+uploaded_file = st.file_uploader("📂 Upload a document", type=["pdf", "docx", "txt"])
+
+if uploaded_file is not None:
+    with st.spinner("Processing uploaded file..."):
+        files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type or "application/octet-stream")}
+        try:
+            res = requests.post(f"{BACKEND_URL}/upload/", files=files, timeout=180)
+        except Exception as e:
+            st.error(f"❌ Summarizer backend error: {e}")
+            res = None
+
+    if res and res.status_code == 200:
+        data = res.json()
+        st.session_state.summary_text = data.get("summary", "")
+        st.session_state.summary_title = data.get("title", "Summary")
+        st.success(f"✅ Document uploaded! Suggested Title: **{st.session_state.summary_title}**. You can now chat with it.")
+
+
+# ---------------- ONE CHAT INPUT ----------------
+if prompt := st.chat_input("💬 Type a message (general chat or ask about uploaded doc)..."):
+
+    if st.session_state.summary_text:  
+        # Doc chat mode
+        st.session_state.doc_chat_history.append(("user", prompt))
+        try:
+            resp = requests.post(
+                f"{BACKEND_URL}/chat-doc",
+                json={"message": prompt, "document_text": st.session_state.summary_text},
+                timeout=120,
+            )
+            if resp.status_code == 200:
+                answer = resp.json().get("response", "⚠️ No answer")
+            else:
+                answer = f"❌ Error: {resp.status_code} — {resp.text}"
+            st.session_state.doc_chat_history.append(("assistant", answer))
+        except Exception as e:
+            st.session_state.doc_chat_history.append(("assistant", f"⚠️ Backend error: {e}"))
+
+    else:  
+        # Normal chat / PPT requests
+        st.session_state.messages.append(("user", prompt))
+        text = prompt.lower()
+
+        try:
+            if "ppt" in text or "presentation" in text or "slides" in text:
+                with st.spinner("Generating PPT outline..."):
+                    resp = requests.post(f"{BACKEND_URL}/generate-ppt-outline", json={"description": prompt}, timeout=120)
+                    if resp.status_code == 200:
+                        st.session_state.outline_chat = resp.json()
+                        st.session_state.messages.append(("assistant", "✅ PPT outline generated! Preview below."))
+                    else:
+                        st.session_state.messages.append(("assistant", f"❌ PPT outline failed: {resp.text}"))
+            else:
+                resp = requests.post(f"{BACKEND_URL}/chat", json={"message": prompt}, timeout=60)
+                bot_reply = resp.json().get("response", "⚠️ Error")
+                st.session_state.messages.append(("assistant", bot_reply))
+        except Exception as e:
+            st.session_state.messages.append(("assistant", f"⚠️ Backend error: {e}"))
 
     st.rerun()
 
@@ -128,50 +171,3 @@ if st.session_state.outline_chat:
                         st.error(f"❌ PPT generation failed: {resp.status_code} — {resp.text}")
                 except Exception as e:
                     st.error(f"❌ PPT generation error: {e}")
-
-
-# ---------------- DOC UPLOAD SECTION ----------------
-uploaded_file = st.file_uploader("📂 Upload a document", type=["pdf", "docx", "txt"])
-
-if uploaded_file is not None:
-    with st.spinner("Processing uploaded file..."):
-        files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type or "application/octet-stream")}
-        try:
-            res = requests.post(f"{BACKEND_URL}/upload/", files=files, timeout=180)
-        except Exception as e:
-            st.error(f"❌ Summarizer backend error: {e}")
-            res = None
-
-    if res and res.status_code == 200:
-        data = res.json()
-        st.session_state.summary_text = data.get("summary", "")
-        st.session_state.summary_title = data.get("title", "Summary")
-        st.success(f"✅ Document uploaded! Suggested Title: **{st.session_state.summary_title}**. You can now chat with it.")
-
-
-# ---------------- CHAT WITH DOCUMENT ----------------
-if st.session_state.summary_text:
-    st.markdown("💬 **Chat with your uploaded document**")
-
-    for role, content in st.session_state.doc_chat_history:
-        with st.chat_message(role):
-            st.markdown(content)
-
-    if doc_prompt := st.chat_input("Ask a question about the uploaded document..."):
-        st.session_state.doc_chat_history.append(("user", doc_prompt))
-
-        try:
-            resp = requests.post(
-                f"{BACKEND_URL}/chat-doc",
-                json={"message": doc_prompt, "document_text": st.session_state.summary_text},
-                timeout=120,
-            )
-            if resp.status_code == 200:
-                answer = resp.json().get("response", "⚠️ No answer")
-            else:
-                answer = f"❌ Error: {resp.status_code} — {resp.text}"
-            st.session_state.doc_chat_history.append(("assistant", answer))
-        except Exception as e:
-            st.session_state.doc_chat_history.append(("assistant", f"⚠️ Backend error: {e}"))
-
-        st.rerun()
